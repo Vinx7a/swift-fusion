@@ -36,10 +36,11 @@ dependencies: [
 import Fusion
 
 // Create a new connection
-let connection = FusionConnection(host: "example.com", port: 7878)
+let connection = FusionConnection(using: .hostPort(host: "example.com", port: 7878))
 
-// Support for NWProtocolTCP.Options, tls example:
-let connection = FusionConnection(host: "example.com", port: 7878, parameters: .init(tcp: .init()))
+// Support for NWParameters, the NWProtocolTCP.Options are applied to the connection
+let options = NWProtocolTCP.Options(); options.noDelay = true
+let connection = FusionConnection(using: .hostPort(host: "example.com", port: 7878), parameters: .init(with: .init(tls: nil, tcp: options)))
 
 // Start connection
 try await connection.start()
@@ -53,7 +54,7 @@ try await connection.start()
 import Fusion
 
 // Create a new connection
-let connection = FusionConnection(host: "example.com", port: 7878)
+let connection = FusionConnection(using: .hostPort(host: "example.com", port: 7878))
 
 // Start connection
 try await connection.start()
@@ -79,7 +80,7 @@ try await connection.send(message: UInt16.max)
 import Fusion
 
 // Create a new connection
-let connection = FusionConnection(host: "example.com", port: 7878)
+let connection = FusionConnection(using: .hostPort(host: "example.com", port: 7878))
 
 // Start connection
 try await connection.start()

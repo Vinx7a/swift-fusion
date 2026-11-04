@@ -20,11 +20,13 @@ public struct FusionParameters: FusionParametersProtocol, Sendable {
     
     /// The configurable `FusionParameters`
     ///
+    /// The `NWProtocolTCP.Options` of the `NWParameters` are applied to the connection
+    ///
     /// - Parameters:
     ///   - parameters: the underlying `NWParameters`
     ///   - priority: the `TaskPriority` for the connection
     ///   - ceiling: the `FusionCeiling` to limit frame size
-    ///   - leverage: the `FusionLeverage` to limit data slices
+    ///   - leverage: the `FusionLeverage` to limit the size of a single read
     public init(with parameters: NWParameters = .tcp, priority: TaskPriority = .userInitiated, ceiling: FusionCeiling = .medium, leverage: FusionLeverage = .high) {
         self.parameters = parameters
         self.priority = priority

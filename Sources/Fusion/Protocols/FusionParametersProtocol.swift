@@ -28,6 +28,6 @@ public protocol FusionParametersProtocol: Sendable {
     ///   - parameters: the underlying `NWParameters`
     ///   - priority: the `TaskPriority` for the connection
     ///   - ceiling: the `FusionCeiling` to limit frame size
-    ///   - leverage: the `FusionLeverage` to limit data slices
+    ///   - leverage: the `FusionLeverage` to limit the size of a single read
     init(with parameters: NWParameters, priority: TaskPriority, ceiling: FusionCeiling, leverage: FusionLeverage)
 }

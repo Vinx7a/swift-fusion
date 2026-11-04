@@ -20,13 +20,15 @@ public enum FusionCeiling: UInt32, Sendable {
     case unlimited = 0xFFFFFFFF
 }
 
-/// The `NetworkConnection` receive connection leverage
+/// The `NetworkConnection` receive leverage, the maximum size of a single read.
+/// A read returns as soon as data is available, a high leverage reduces the read
+/// overhead on fast connections without delaying small messages.
 @frozen
-public enum FusionLeverage: UInt16, Sendable {
-    case low     = 0x2000
-    case medium  = 0x4000
-    case high    = 0x8000
-    case extreme = 0xFFFF
+public enum FusionLeverage: UInt32, Sendable {
+    case low     = 0x10000
+    case medium  = 0x40000
+    case high    = 0x100000
+    case extreme = 0x400000
 }
 
 // MARK: - Message Flow Control -

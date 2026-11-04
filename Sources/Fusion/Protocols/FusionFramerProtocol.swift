@@ -35,15 +35,15 @@ protocol FusionFramerProtocol: Sendable {
     /// Clear the internal `Data` message buffer
     ///
     /// Current message buffer will be cleared
-    func clear() async -> Void
+    mutating func clear() -> Void
     
     /// Create a `FusionMessage` conform frame
     ///
     /// - Parameters:
     ///   - message: generic type which conforms to `FusionMessage`
-    ///   - ceiling: the inbound buffer size limit from `FusionCeiling`
+    ///   - ceiling: the outbound frame size limit from `FusionCeiling`
     /// - Returns: the message frame as `Data`
-    nonisolated func create<Message: FusionFrame>(message: Message, ceiling: FusionCeiling) throws(FusionFramerError) -> Data
+    static func create<Message: FusionFrame>(message: Message, ceiling: FusionCeiling) throws(FusionFramerError) -> Data
     
     /// Parse a `FusionMessage` conform to the `FusionFrame`
     ///
@@ -51,5 +51,5 @@ protocol FusionFramerProtocol: Sendable {
     ///   - slice: the `Data` slice of the `FusionMessage` conform to the `FusionFrame`
     ///   - ceiling: the inbound buffer size limit from `FusionCeiling`
     /// - Returns: a collection of `FusionMessage`s conform to the `FusionFrame` and `Error`
-    func parse(slice: Data, ceiling: FusionCeiling) async throws(FusionFramerError) -> [FusionFrame]
+    mutating func parse(slice: Data, ceiling: FusionCeiling) throws(FusionFramerError) -> [FusionFrame]
 }

@@ -11,16 +11,54 @@ import Network
 
 // MARK: - Network -
 
-extension NetworkConnection {
+extension NetworkConnection<TCP> {
     /// Validate connection establishment
     ///
     /// Checks if connection was established otherwise throws error
-    func timeout(after timeout: Duration = .timeout) async throws -> Void {
+    ///
+    /// - Parameter timeout: the establishment timeout as `Duration`
+    func established(timeout: Duration = .timeout) async throws -> Void {
         let clock = ContinuousClock(), deadline = clock.now + timeout
-        while !Task.isCancelled {
-            switch self.state { case .ready: return case .failed(let error), .waiting(let error): throw error default: break }
+        while true {
+            switch state { case .ready: return case .failed(let error), .waiting(let error): throw error case .cancelled: throw CancellationError() default: break }
             guard clock.now < deadline else { throw FusionConnectionError.timeout }; try await clock.sleep(for: .interval)
         }
+    }
+}
+
+extension TCP {
+    /// Create the `TCP` protocol from `NWParameters`
+    ///
+    /// The protocol stack builder replaces the transport options of the initial parameters,
+    /// the configured `NWProtocolTCP.Options` are applied to the `TCP` protocol instead
+    ///
+    /// - Parameter parameters: the `NWParameters` containing `NWProtocolTCP.Options`
+    init(from parameters: NWParameters) {
+        guard let options = parameters.defaultProtocolStack.transportProtocol as? NWProtocolTCP.Options else { self.init(); return }
+        self = TCP().flags(from: options).timeouts(from: options)
+    }
+    
+    /// Apply the flags of `NWProtocolTCP.Options`
+    ///
+    /// - Parameter options: the `NWProtocolTCP.Options`
+    /// - Returns: the configured `TCP`
+    private func flags(from options: NWProtocolTCP.Options) -> TCP {
+        let tcp = self.noDelay(options.noDelay).noPush(options.noPush).noOptions(options.noOptions).retransmitFinDrop(options.retransmitFinDrop)
+        return tcp.ackStretchingDisabled(options.disableAckStretching).fastOpenAllowed(options.enableFastOpen).ecnDisabled(options.disableECN)
+    }
+    
+    /// Apply the timeouts, keepalive and segment size of `NWProtocolTCP.Options`
+    ///
+    /// - Parameter options: the `NWProtocolTCP.Options`
+    /// - Returns: the configured `TCP`
+    private func timeouts(from options: NWProtocolTCP.Options) -> TCP {
+        var tcp = self
+        if options.enableKeepalive { tcp = tcp.keepalive(idleTimeInSeconds: UInt32(options.keepaliveIdle), count: UInt32(options.keepaliveCount), intervalInSeconds: UInt32(options.keepaliveInterval)) }
+        if options.maximumSegmentSize > .zero { tcp = tcp.maximumSegmentSize(UInt32(options.maximumSegmentSize)) }
+        if options.connectionTimeout > .zero { tcp = tcp.connectionTimeout(UInt32(options.connectionTimeout)) }
+        if options.persistTimeout > .zero { tcp = tcp.persistTimeout(UInt32(options.persistTimeout)) }
+        if options.connectionDropTime > .zero { tcp = tcp.retransmitConnectionDropTime(UInt32(options.connectionDropTime)) }
+        return tcp
     }
 }
 
@@ -28,29 +66,10 @@ extension NetworkConnection {
 
 extension Duration {
     /// Interval time
-    static var interval: Self { .milliseconds(50) }
+    static var interval: Self { .milliseconds(5) }
     
     /// Timeout deadline
     static var timeout: Self { .seconds(4.0) }
-}
-
-// MARK: - Data -
-
-extension Data {
-    /// Slice data into chunks
-    ///
-    /// - Parameter leverage: the size of each chunk as `Int`
-    func chunks(of leverage: FusionLeverage) -> [Data] {
-        if leverage == .extreme { return [self] }
-        let size: Int = Swift.min(Int(leverage.rawValue), Int(UInt16.max / 2))
-        return stride(from: .zero, to: count, by: size).map { subdata(in: $0..<(count - $0 > size ? $0 + size : count)) }
-    }
-    
-    /// Extract `UInt32` from data as big endian
-    var endian: UInt32? {
-        guard count >= MemoryLayout<UInt32>.size else { return nil }
-        return UInt32(bigEndian: withUnsafeBytes { $0.load(as: UInt32.self) })
-    }
 }
 
 // MARK: - UInt32 -
@@ -69,12 +88,14 @@ extension UInt32 {
 // MARK: - Fusion Framer Data -
 
 extension Data {
-    /// Extract `UInt32` from payload
+    /// Extract the frame length from the header
     ///
-    /// - Returns: the extracted length as `UInt32
-    func length() throws(FusionFramerError) -> UInt32? {
-        guard self.count >= FusionStatic.header.rawValue else { return nil }
-        let length = Data(self.subdata(in: Int(FusionStatic.opcode.rawValue)..<Int(FusionStatic.header.rawValue))).endian
+    /// - Parameter index: the start index of the frame
+    /// - Returns: the extracted length as `UInt32`
+    func length(at index: Index) throws(FusionFramerError) -> UInt32? {
+        guard self.endIndex - index >= FusionStatic.header.rawValue else { return nil }
+        let lower = index + Int(FusionStatic.opcode.rawValue), upper = index + Int(FusionStatic.header.rawValue)
+        let length = UInt32(bigEndian: self[lower..<upper].withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) })
         if length != .zero { return length } else { throw FusionFramerError.invalid }
     }
     
@@ -82,10 +103,11 @@ extension Data {
     ///
     /// - Parameters:
     ///   - opcode: the `FusionOpcode`
-    ///   - length: the length of the payload
+    ///   - index: the start index of the frame
+    ///   - length: the length of the frame
     /// - Returns: the `FusionMessage`
-    func decode(with opcode: UInt8, from length: UInt32) -> FusionFrame? {
+    func decode(with opcode: UInt8, at index: Index, from length: UInt32) -> FusionFrame? {
         guard let range = length.payload else { return nil }
-        return FusionOpcode(rawValue: opcode)?.rawType.decode(from: Data(self.subdata(in: range)))
+        return FusionOpcode(rawValue: opcode)?.rawType.decode(from: Data(self[(index + range.lowerBound)..<(index + range.upperBound)]))
     }
 }
